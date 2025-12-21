@@ -66,7 +66,7 @@ def radioml_IQ_data(filename):
                 lbl.append((mod,snr))
     X = np.vstack(X)
     
-#     use QAM16 signal only
+#     use QAM16 signal only 16-Quadrature Amplitude Modulation
     lbl = np.array(lbl) 
     index = np.where(lbl=='QAM16')[0]   
     X = X[index]
@@ -161,3 +161,4 @@ def DetectNet(lr,input_shape,filter_num,lstm_units,kernel_size,drop_ratio,lstm_d
 # then LSTMs to understand signal patterns over time,
 
 # and finally classifies whether a signal exists or it’s just noise.
+
