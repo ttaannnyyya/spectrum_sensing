@@ -13,9 +13,8 @@ def get_pf(x_val,y_val,val_SNRs,model,epoch,pf_min,pf_max):
         callback for pfs evaluation at evert epoch end
     '''
     y_val_hat = model.predict(x_val,verbose=0)
-    cm = confusion_matrix(np.argmax(y_val,1), np.argmax(y_val_hat, 1))
-    cm_norm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
-    cm_norm = np.nan_to_num(cm_norm)
+    cm = confusion_matrix(np.argmax(y_val,1), np.argmax(y_val_hat, 1)) # return index of larger [0,1]->1, along row
+    cm_norm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis] #converts a 1-D array into a column vector
     pf = 100*cm_norm[1][0]
     print("False Alarm:%.3f%%"%pf)
     # set the pf stop interval for a CFAR detector
@@ -38,77 +37,33 @@ def performance_evaluation(save_path,x_test,y_test,test_SNRs,model):
         test_y_i_hat = np.array(model.predict(test_x_i,verbose=0))
         cm = confusion_matrix(np.argmax(test_y_i, 1), np.argmax(test_y_i_hat,1))
         cm_norm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
-        cm_norm = np.nan_to_num(cm_norm)
         pd_list.append(cm_norm[0][0])     
     # save Pds result to xls file, the last element if Pf    
     import csv
+    save_path = r"D:\Projects\Spectrum_Detection\Pds.csv"
     pd_list.append(pf)
     with open(save_path,'w') as f:
         f_csv = csv.writer(f)
         f_csv.writerow(pd_list)
-        
-def getFontColor(value):
-    '''
-        set color in confusion matrix plot
-    '''
-    if np.isnan(value):
-        return "black"
-    elif value < 0.2:
-        return "black"
-    else:
-        return "white"
-
-def getConfusionMatrixPlot(true_labels, predicted_labels):
-    '''
-        plot confusion matrix
-    '''
-    import matplotlib.pyplot as plt
-    cm = confusion_matrix(true_labels, predicted_labels)
-    cm_norm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
-    cm_norm = np.nan_to_num(cm_norm)
-    cm = np.round(cm_norm,2)
-    # create figure
-    fig = plt.figure()
-    plt.clf()
-    ax = fig.add_subplot(111)
-    ax.set_aspect(1)
-    ax.set_xlabel('Predicted label')
-    ax.set_ylabel('True label')
-    res = ax.imshow(cm, cmap=plt.cm.binary,
-                    interpolation='nearest', vmin=0, vmax=1)
-    # add color bar
-    plt.colorbar(res)
-    # annotate confusion entries
-    width = len(cm)
-    height = len(cm[0])
-    for x in range(width):
-        for y in range(height):
-            ax.annotate(str(cm[x][y]), xy=(y, x), horizontalalignment='center',
-                        verticalalignment='center', color=getFontColor(cm[x][y]))
-    # add genres as ticks
-    alphabet = ['with signal','noise only'] 
-    plt.xticks(range(width), alphabet[:width], rotation=30)
-    plt.yticks(range(height), alphabet[:height])
-    plt.title('Confusion matrix for all snrs')
-    print("Miss Detection:%.3f%%"%(100*cm_norm[0][1]))
-    print("False Alarm:%.3f%%"%(100*cm_norm[1][0]))
-    return plt,100*cm_norm[1][0]
 
 def radioml_IQ_data(filename):
     '''
-        load dataset for single node model training
+        load dataset for model training
     '''
     snrs=""
     mods=""
     lbl =""
     Xd = pickle.load(open(filename,'rb'),encoding='latin')
-    snrs,mods = map(lambda j: sorted(list(set(map(lambda x: x[j], Xd.keys())))), [1,0])
+    snrs = sorted(set(key[1] for key in Xd.keys()))
+    mods = sorted(set(key[0] for key in Xd.keys()))
+
     X = []  
     lbl = []
     for mod in mods:
         for snr in snrs:
             X.append(Xd[(mod,snr)])
-            for i in range(Xd[(mod,snr)].shape[0]):  lbl.append((mod,snr))
+            for i in range(Xd[(mod,snr)].shape[0]):  
+                lbl.append((mod,snr))
     X = np.vstack(X)
     
 #     use QAM16 signal only
@@ -143,7 +98,7 @@ def radioml_IQ_data(filename):
     SNR = np.concatenate((SNR,[-100]*len(noise_vectors)),axis=0) 
 
     total_num = len(dataset)
-    shuffle_idx = np.random.choice(range(0,total_num), size=total_num,replace=False)
+    shuffle_idx = np.random.choice(range(0,total_num), size=total_num,replace=False) #generates a random permutation of indices so the dataset can be shuffled
     dataset = dataset[shuffle_idx]
     labelset = labelset[shuffle_idx]
     SNR = SNR[shuffle_idx]
@@ -179,19 +134,19 @@ def DetectNet(lr,input_shape,filter_num,lstm_units,kernel_size,drop_ratio,lstm_d
     '''
     ConvInput = Input(input_shape)
 # put shape → (2, 128)
-# 2 = I/Q channels
+# 2 = I/Q channels. The 2 (I/Q channels) are treated as input channels, not as a spatial dimension.
 # 128 = signal length
     x1 = Convolution1D(filter_num,kernel_size,padding='same',data_format='channels_first',activation='relu')(ConvInput)
     x1 = Dropout(rate=drop_ratio)(x1)
     x2 = Convolution1D(filter_num,kernel_size,padding='same',data_format='channels_first',activation='relu')(x1)
     x2 = Dropout(rate=drop_ratio)(x2)
     x3 = Flatten()(x2)
-    x4 = Dense(input_shape[-1],activation='relu')(x3)
+    x4 = Dense(input_shape[-1],activation='relu')(x3) #input_shape[-1]=128
     x4 = Reshape(target_shape=(1,input_shape[-1]))(x4)
     
     LSTMInput = concatenate([x4,ConvInput],axis=1)
     
-    y1 = LSTM(units=lstm_units,return_sequences=True,recurrent_dropout=lstm_drop_ratio,input_shape=(input_shape[-1],3))(LSTMInput)
+    y1 = LSTM(units=lstm_units,return_sequences=True,recurrent_dropout=lstm_drop_ratio,input_shape=(input_shape[-1],3))(LSTMInput) #[t] → [cnn, I1, Q1]
     y2 = LSTM(units=lstm_units,dropout=lstm_drop_ratio)(y1) 
     y2 = Flatten()(y2)
     y3 = Dense(dense_units,activation='relu')(y2)
@@ -204,4 +159,5 @@ def DetectNet(lr,input_shape,filter_num,lstm_units,kernel_size,drop_ratio,lstm_d
 
 # DetectNet first uses CNNs to extract signal features,
 # then LSTMs to understand signal patterns over time,
+
 # and finally classifies whether a signal exists or it’s just noise.
