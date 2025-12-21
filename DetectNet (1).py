@@ -5,7 +5,7 @@ from tensorflow.keras.models import load_model
 from tensorflow.keras.callbacks import LambdaCallback,EarlyStopping,ModelCheckpoint,TensorBoard
 
 # GPU usage setup
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0" #If no GPU → code still works on CPU.
 
 #%%
 # hyperparameters 
@@ -41,7 +41,7 @@ pf_min = 6.5
 pf_max = 7.5
 pf_test = LambdaCallback(
     on_epoch_end=lambda epoch, 
-    logs: utils.get_pf(x_val,y_val,val_SNRs,model,epoch,pf_min,pf_max))
+    logs: utils.get_pf(x_val,y_val,val_SNRs,model,epoch,pf_min,pf_max)) #After every epoch, this runs
 print('Start second stage, trade-off metrics')
 model = load_model(best_model_path)
 model.fit(x_train,y_train,epochs=max_epoch,batch_size=200,verbose=1,shuffle=True,
@@ -54,3 +54,4 @@ if model.stop_training:
     utils.performance_evaluation(save_path,x_test,y_test,test_SNRs,model)
 else:
     print("Can't meet pf lower bound")
+
